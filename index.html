@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>住戶姓名 → 住址 即時查詢</title>
+  <title>住戶姓名 → 住址 即時查詢（診斷版）</title>
   <style>
     :root { --radius: 14px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, Arial, "蘋果儷中黑", "微軟正黑體", sans-serif; margin: 0; padding: 24px; background:#f7f7fb; }
-    .wrap { max-width: 820px; margin: 0 auto; }
+    .wrap { max-width: 920px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 14px; }
     .card { background: #fff; border-radius: var(--radius); box-shadow: 0 8px 18px rgba(0,0,0,.06); padding: 18px; }
     .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
@@ -16,8 +16,6 @@
     input[type="text"]:focus { border-color: #7b8cff; box-shadow: 0 0 0 3px rgba(123,140,255,.15); }
     .btn { padding: 10px 12px; border-radius: 12px; border: 1px solid #dcdce6; background: #fff; cursor: pointer; font-size: 14px; }
     .btn:hover { background: #f2f4ff; border-color: #bfc7ff; }
-    .btn.primary { background: #5562ff; color: #fff; border-color: #5562ff; }
-    .btn.primary:hover { filter: brightness(1.05); }
     .hint { color: #6a6a75; font-size: 13px; margin-top: 8px; }
     .dropdown { position: relative; margin-top: 8px; }
     .list { position: absolute; z-index: 10; left: 0; right: 0; background: #fff; border: 1px solid #e6e6ef; border-radius: 12px; box-shadow: 0 10px 22px rgba(0,0,0,.08); max-height: 280px; overflow: auto; }
@@ -28,18 +26,19 @@
     .meta { color: #6a6a75; font-size: 13px; white-space: nowrap; }
     mark { background: #ffeaa7; }
     .result { margin-top: 14px; border-top: 1px dashed #e1e1ea; padding-top: 12px; }
-    .result .rowline { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 6px 0; }
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; background: #f1f1f6; border: 1px solid #e2e2ee; border-bottom-width: 2px; border-radius: 6px; padding: 0 6px; font-size: 12px; }
-    details { margin-top: 14px; }
-    summary { cursor: pointer; color: #444; }
+    .rowline { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 6px 0; }
     .mini { font-size: 12px; color:#7a7a88; }
     .ok { color: #2f8f46; font-weight: 600; }
     .err { color: #c0392b; font-weight: 600; }
+    .warn { color: #d48806; font-weight: 600; }
+    .box { background:#f8f9ff; border:1px dashed #cfd3ff; padding:10px; border-radius:10px; margin-top:10px; }
+    a { color:#3348ff; }
+    code { background:#f1f1f6; padding:2px 6px; border-radius:6px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>住戶姓名 → 住址 即時查詢</h1>
+    <h1>住戶姓名 → 住址 即時查詢（診斷版）</h1>
     <div class="card">
       <div class="row">
         <div>
@@ -48,199 +47,181 @@
             <input id="q" type="text" placeholder="例如：阿、王、小…" autocomplete="off" />
             <div id="list" class="list" hidden></div>
           </div>
-          <div class="hint">↑↓ 選單移動，<span class="kbd">Enter</span> 選取；選到後會顯示完整住址。</div>
+          <div class="hint">↑↓ 選單移動，Enter 選取；選到後會顯示完整住址。</div>
         </div>
         <div class="controls">
-          <button id="reload" class="btn" title="重新載入 residents.csv（避免快取）">重新載入資料</button>
+          <button id="reload" class="btn">重新載入資料</button>
           <label class="btn" for="file">臨時載入本機 CSV</label>
           <input id="file" type="file" accept=".csv,text/csv" hidden />
         </div>
       </div>
+
       <div id="result" class="result" hidden></div>
-      <details>
-        <summary>資料來源與更新方式</summary>
+
+      <div class="box">
         <div class="mini">
-          <p>預設會從<strong>同資料夾</strong>讀取 <code>residents.csv</code>。想更新名單，直接用新的 CSV 覆蓋同名檔案即可（GitHub Pages 只要 push/commit 新檔）。
-            按「重新載入資料」會自動加上時間戳避免瀏覽器快取。</p>
-          <p>必備欄位任一語系皆可：<code>姓名</code>/<code>name</code>、<code>住址</code>/<code>address</code>。可選欄位（若有會顯示於清單右側）：<code>棟</code>/<code>building</code>、<code>門牌</code>/<code>door_no</code>。</p>
-          <p>也支援臨時選檔：點「臨時載入本機 CSV」不需上傳伺服器，僅在本機瀏覽器解析。</p>
+          <div>狀態：<span id="state" class="warn">尚未載入</span></div>
+          <div id="diagnose"></div>
+          <div style="margin-top:6px">CSV 直接連結（請點看看能否下載）： <a id="csvLink" href="#" target="_blank">residents.csv</a></div>
+          <div>必備欄位：<code>姓名/name</code>、<code>住址/address</code>；可選：<code>棟/building</code>、<code>門牌/door_no</code></div>
         </div>
-      </details>
-      <div class="mini" style="margin-top:10px">狀態：<span id="state" class="ok">等待輸入</span></div>
+      </div>
     </div>
   </div>
-  <script>
-  // ======== 小工具 ========
-  const $ = (sel, el=document) => el.querySelector(sel);
-  const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // 簡易 CSV 解析器（支援引號與逗號）
-  function parseCSV(text) {
-    const rows = [];
-    let row = [], cell = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i], n = text[i+1];
-      if (inQuotes) {
-        if (c === '"' && n === '"') { cell += '"'; i++; }
-        else if (c === '"') { inQuotes = false; }
-        else { cell += c; }
-      } else {
-        if (c === '"') { inQuotes = true; }
-        else if (c === ',') { row.push(cell); cell = ''; }
-        else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
-        else if (c === '\r') { /* ignore */ }
-        else { cell += c; }
-      }
+<script>
+const $ = (s, el=document)=>el.querySelector(s);
+const $$ = (s, el=document)=>Array.from(el.querySelectorAll(s));
+
+function parseCSV(text) {
+  const rows = [];
+  let row=[], cell='', inQuotes=false;
+  for (let i=0;i<text.length;i++) {
+    const c=text[i], n=text[i+1];
+    if (inQuotes) {
+      if (c=='"' && n=='"'){ cell+='"'; i++; }
+      else if (c=='"'){ inQuotes=false; }
+      else { cell+=c; }
+    } else {
+      if (c=='"'){ inQuotes=true; }
+      else if (c==','){ row.push(cell); cell=''; }
+      else if (c=='\\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if (c=='\\r'){}
+      else { cell+=c; }
     }
-    if (cell.length > 0 || row.length > 0) { row.push(cell); rows.push(row); }
-    return rows;
   }
+  if (cell.length>0 || row.length>0){ row.push(cell); rows.push(row); }
+  return rows;
+}
 
-  function toRecords(rows) {
-    if (!rows.length) return [];
-    const header = rows[0].map(h => h.trim().toLowerCase());
-    const idx = (alts) => alts.map(a => header.indexOf(a)).find(i => i >= 0);
-    const nameIdx = idx(['姓名','name']);
-    const addrIdx = idx(['住址','address']);
-    const bldgIdx = idx(['棟','building']);
-    const doorIdx = idx(['門牌','門牌號','door_no','doorno']);
-    const recs = [];
-    for (let i=1; i<rows.length; i++) {
-      const r = rows[i];
-      const name = r[nameIdx] ? r[nameIdx].trim() : '';
-      const addr = r[addrIdx] ? r[addrIdx].trim() : '';
-      if (!name || !addr) continue; // 必備欄位
-      recs.push({
-        name,
-        address: addr,
-        building: bldgIdx>=0 ? (r[bldgIdx]||'').trim() : '',
-        door: doorIdx>=0 ? (r[doorIdx]||'').trim() : ''
-      });
-    }
-    return recs;
+function toRecords(rows) {
+  if (!rows.length) return [];
+  const header = rows[0].map(h=>h.trim().toLowerCase());
+  const idx = alts=>alts.map(a=>header.indexOf(a)).find(i=>i>=0);
+  const nameIdx = idx(['姓名','name']);
+  const addrIdx = idx(['住址','address']);
+  const bldgIdx = idx(['棟','building']);
+  const doorIdx = idx(['門牌','門牌號','door_no','doorno']);
+  const recs=[];
+  for (let i=1;i<rows.length;i++){
+    const r=rows[i];
+    const name = r[nameIdx]?r[nameIdx].trim():'';
+    const addr = r[addrIdx]?r[addrIdx].trim():'';
+    if (!name || !addr) continue;
+    recs.push({ name, address: addr, building: bldgIdx>=0 ? (r[bldgIdx]||'').trim() : '', door: doorIdx>=0 ? (r[doorIdx]||'').trim() : '' });
   }
+  return recs;
+}
 
-  // 高亮顯示匹配字
-  function highlight(text, needle) {
-    if (!needle) return text;
-    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp(esc, 'gi'), m => `<mark>${m}</mark>`);
-  }
+let records=[];
 
-  // ======== 資料載入 ========
-  let records = [];
-  async function loadCSV(url) {
-    $('#state').textContent = '載入中…';
-    $('#state').className = 'mini';
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+async function tryLoad(paths){
+  for (const p of paths){
+    try{
+      const res = await fetch(p, {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP '+res.status);
       const text = await res.text();
       const rows = parseCSV(text);
-      records = toRecords(rows);
-      $('#state').textContent = `已載入 ${records.length} 筆`;
-      $('#state').className = 'ok';
-    } catch (err) {
-      console.error(err);
-      $('#state').textContent = '載入失敗';
-      $('#state').className = 'err';
+      const recs = toRecords(rows);
+      if (recs.length){
+        $('#state').textContent = `已載入 ${recs.length} 筆（${p}）`;
+        $('#state').className = 'ok';
+      } else {
+        $('#state').textContent = `載入 0 筆（欄位不符？來源：${p}）`;
+        $('#state').className = 'warn';
+      }
+      records = recs;
+      return true;
+    }catch(e){
+      $('#diagnose').innerHTML += `<div class="mini">嘗試 <code>${p}</code> 失敗</div>`;
     }
   }
+  $('#state').textContent = '載入失敗（找不到 residents.csv）';
+  $('#state').className = 'err';
+  return false;
+}
 
-  // 初次載入預設 CSV（加時間戳避免快取）
-  const defaultCSV = 'residents.csv';
-  loadCSV(`${defaultCSV}?v=${Date.now()}`);
+function setup(){
+  const base = location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/, '');
+  const candidates = [
+    './residents.csv?v='+Date.now(),
+    'residents.csv?v='+Date.now(),
+    base + 'residents.csv?v=' + Date.now()
+  ];
+  $('#csvLink').href = base + 'residents.csv';
+  tryLoad(candidates);
+}
 
-  // 重新載入按鈕
-  $('#reload').addEventListener('click', () => loadCSV(`${defaultCSV}?v=${Date.now()}`));
+function highlight(text, needle){
+  if (!needle) return text;
+  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(esc,'gi'), m=>`<mark>${m}</mark>`);
+}
 
-  // 本機選檔（不上傳）
-  $('#file').addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const rows = parseCSV(text);
-    records = toRecords(rows);
-    $('#state').textContent = `（本機）已載入 ${records.length} 筆`;
-    $('#state').className = 'ok';
+const q = $('#q'), list = $('#list'), result = $('#result');
+let activeIdx=-1;
+
+function filterRecords(needle){
+  if (!needle) return [];
+  const n = needle.trim();
+  if (!n) return [];
+  return records.filter(r=>r.name.toLowerCase().includes(n.toLowerCase())).slice(0,200);
+}
+
+function renderList(items, needle){
+  list.innerHTML='';
+  if (!items.length){ list.hidden = true; return; }
+  const frag=document.createDocumentFragment();
+  items.forEach((r,i)=>{
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `<div class="name">${highlight(r.name, needle)}</div><div class="meta">${[r.building, r.door].filter(Boolean).join(' ')}</div>`;
+    div.addEventListener('click', ()=>selectItem(r));
+    frag.appendChild(div);
   });
+  list.appendChild(frag);
+  list.hidden=false; activeIdx=-1;
+}
 
-  // ======== 搜尋與下拉 ========
-  const q = $('#q');
-  const list = $('#list');
-  const result = $('#result');
-  let activeIdx = -1;
+function selectItem(rec){
+  list.hidden=true; q.value=rec.name; result.hidden=false;
+  result.innerHTML = `<div class="rowline"><div>姓名</div><div><strong>${rec.name}</strong></div></div>
+                      <div class="rowline"><div>住址</div><div>${rec.address}</div></div>
+                      ${rec.building||rec.door?`<div class="rowline"><div>其他</div><div>${[rec.building, rec.door].filter(Boolean).join(' / ')}</div></div>`:''}`;
+}
 
-  function filterRecords(needle) {
-    if (!needle) return [];
-    const n = needle.trim();
-    if (!n) return [];
-    return records.filter(r => r.name.toLowerCase().includes(n.toLowerCase())).slice(0, 200);
-  }
+let t;
+q.addEventListener('input', ()=>{
+  clearTimeout(t);
+  t = setTimeout(()=>{
+    renderList(filterRecords(q.value), q.value);
+  }, 100);
+});
 
-  function renderList(items, needle) {
-    list.innerHTML = '';
-    if (!items.length) { list.hidden = true; return; }
-    const frag = document.createDocumentFragment();
-    items.forEach((r, i) => {
-      const div = document.createElement('div');
-      div.className = 'item';
-      div.dataset.idx = i;
-      div.innerHTML = `<div class="name">${highlight(r.name, needle)}</div>` +
-                      `<div class="meta">${[r.building, r.door].filter(Boolean).join(' ')}&nbsp;</div>`;
-      div.addEventListener('click', () => selectItem(r));
-      frag.appendChild(div);
-    });
-    list.appendChild(frag);
-    list.hidden = false;
-    activeIdx = -1;
-  }
+q.addEventListener('keydown', (e)=>{
+  if (list.hidden) return;
+  const items = $$('.item', list);
+  if (!items.length) return;
+  if (e.key==='ArrowDown'){ e.preventDefault(); activeIdx=(activeIdx+1)%items.length; }
+  else if (e.key==='ArrowUp'){ e.preventDefault(); activeIdx=(activeIdx-1+items.length)%items.length; }
+  else if (e.key==='Enter'){ e.preventDefault(); const rec=filterRecords(q.value)[activeIdx>=0?activeIdx:0]; if(rec) selectItem(rec); }
+  else if (e.key==='Escape'){ list.hidden=true; }
+  items.forEach(el=>el.classList.remove('active'));
+  if (activeIdx>=0) items[activeIdx].classList.add('active');
+});
 
-  function selectItem(rec) {
-    list.hidden = true;
-    q.value = rec.name;
-    result.hidden = false;
-    result.innerHTML = `
-      <div class="rowline"><div>姓名</div><div><strong>${rec.name}</strong></div></div>
-      <div class="rowline"><div>住址</div><div>${rec.address}</div></div>
-      ${rec.building || rec.door ? `<div class="rowline"><div>其他</div><div>${[rec.building, rec.door].filter(Boolean).join(' / ')}</div></div>` : ''}
-    `;
-  }
+$('#reload').addEventListener('click', setup);
+$('#file').addEventListener('change', async (e)=>{
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  const rows = parseCSV(text);
+  records = toRecords(rows);
+  $('#state').textContent = `（本機）已載入 ${records.length} 筆`;
+  $('#state').className = 'ok';
+});
 
-  let t; // debounce
-  q.addEventListener('input', () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      const items = filterRecords(q.value);
-      renderList(items, q.value);
-    }, 80);
-  });
-
-  q.addEventListener('keydown', (e) => {
-    if (list.hidden) return;
-    const items = $$('.item', list);
-    if (!items.length) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      activeIdx = (activeIdx + 1) % items.length;
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      activeIdx = (activeIdx - 1 + items.length) % items.length;
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const rec = filterRecords(q.value)[activeIdx >= 0 ? activeIdx : 0];
-      if (rec) selectItem(rec);
-    } else if (e.key === 'Escape') {
-      list.hidden = true;
-    } else { return; }
-    items.forEach(el => el.classList.remove('active'));
-    if (activeIdx >= 0) items[activeIdx].classList.add('active');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!$('.dropdown').contains(e.target)) list.hidden = true;
-  });
-  </script>
+setup();
+</script>
 </body>
 </html>
