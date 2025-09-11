@@ -3,15 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>住戶姓名 → 住址 即時查詢（診斷版）</title>
+  <title>住戶姓名 → 住址 即時查詢</title>
   <style>
     :root { --radius: 14px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, Arial, "蘋果儷中黑", "微軟正黑體", sans-serif; margin: 0; padding: 24px; background:#f7f7fb; }
-    .wrap { max-width: 920px; margin: 0 auto; }
+    .wrap { max-width: 820px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 14px; }
     .card { background: #fff; border-radius: var(--radius); box-shadow: 0 8px 18px rgba(0,0,0,.06); padding: 18px; }
     .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
     input[type="text"] { width: 100%; padding: 12px 14px; border: 1px solid #dcdce6; border-radius: 12px; font-size: 16px; outline: none; }
     input[type="text"]:focus { border-color: #7b8cff; box-shadow: 0 0 0 3px rgba(123,140,255,.15); }
     .btn { padding: 10px 12px; border-radius: 12px; border: 1px solid #dcdce6; background: #fff; cursor: pointer; font-size: 14px; }
@@ -26,7 +25,7 @@
     .meta { color: #6a6a75; font-size: 13px; white-space: nowrap; }
     mark { background: #ffeaa7; }
     .result { margin-top: 14px; border-top: 1px dashed #e1e1ea; padding-top: 12px; }
-    .rowline { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 6px 0; }
+    .result .rowline { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 6px 0; }
     .mini { font-size: 12px; color:#7a7a88; }
     .ok { color: #2f8f46; font-weight: 600; }
     .err { color: #c0392b; font-weight: 600; }
@@ -38,11 +37,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>住戶姓名 → 住址 即時查詢（診斷版）</h1>
+    <h1>住戶姓名 → 住址 即時查詢</h1>
     <div class="card">
       <div class="row">
         <div>
-          <label for="q" class="mini">輸入任一字元，就會列出「名字中包含」該字的住戶</label>
+          <label for="q" class="mini">輸入任一字元，列出名字中包含該字的住戶</label>
           <div class="dropdown">
             <input id="q" type="text" placeholder="例如：阿、王、小…" autocomplete="off" />
             <div id="list" class="list" hidden></div>
@@ -50,21 +49,13 @@
           <div class="hint">↑↓ 選單移動，Enter 選取；選到後會顯示完整住址。</div>
         </div>
         <div class="controls">
-          <button id="reload" class="btn">重新載入資料</button>
-          <label class="btn" for="file">臨時載入本機 CSV</label>
-          <input id="file" type="file" accept=".csv,text/csv" hidden />
+          <button id="reload" class="btn" title="重新載入 residents.csv（避免快取）">重新載入資料</button>
         </div>
       </div>
-
       <div id="result" class="result" hidden></div>
-
-      <div class="box">
-        <div class="mini">
-          <div>狀態：<span id="state" class="warn">尚未載入</span></div>
-          <div id="diagnose"></div>
-          <div style="margin-top:6px">CSV 直接連結（請點看看能否下載）： <a id="csvLink" href="#" target="_blank">residents.csv</a></div>
-          <div>必備欄位：<code>姓名/name</code>、<code>住址/address</code>；可選：<code>棟/building</code>、<code>門牌/door_no</code></div>
-        </div>
+      <div class="box mini">
+        <div>狀態：<span id="state" class="warn">尚未載入</span></div>
+        <div>CSV 位置：<code>./residents.csv</code>（需與 <code>index.html</code> 同層）</div>
       </div>
     </div>
   </div>
@@ -85,8 +76,8 @@ function parseCSV(text) {
     } else {
       if (c=='"'){ inQuotes=true; }
       else if (c==','){ row.push(cell); cell=''; }
-      else if (c=='\\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
-      else if (c=='\\r'){}
+      else if (c=='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if (c=='\r'){}
       else { cell+=c; }
     }
   }
@@ -115,47 +106,22 @@ function toRecords(rows) {
 
 let records=[];
 
-async function tryLoad(paths){
-  for (const p of paths){
-    try{
-      const res = await fetch(p, {cache:'no-store'});
-      if (!res.ok) throw new Error('HTTP '+res.status);
-      const text = await res.text();
-      const rows = parseCSV(text);
-      const recs = toRecords(rows);
-      if (recs.length){
-        $('#state').textContent = `已載入 ${recs.length} 筆（${p}）`;
-        $('#state').className = 'ok';
-      } else {
-        $('#state').textContent = `載入 0 筆（欄位不符？來源：${p}）`;
-        $('#state').className = 'warn';
-      }
-      records = recs;
-      return true;
-    }catch(e){
-      $('#diagnose').innerHTML += `<div class="mini">嘗試 <code>${p}</code> 失敗</div>`;
-    }
+async function loadCSV(){
+  $('#state').textContent = '載入中…'; $('#state').className='mini';
+  try{
+    const res = await fetch('residents.csv?v='+Date.now(), {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    records = toRecords(rows);
+    const n = records.length;
+    $('#state').textContent = n ? `已載入 ${n} 筆` : '載入 0 筆（檢查欄位：姓名/住址）';
+    $('#state').className = n ? 'ok' : 'warn';
+  }catch(e){
+    console.error(e);
+    $('#state').textContent = '載入失敗（找不到 residents.csv 或權限問題）';
+    $('#state').className = 'err';
   }
-  $('#state').textContent = '載入失敗（找不到 residents.csv）';
-  $('#state').className = 'err';
-  return false;
-}
-
-function setup(){
-  const base = location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/, '');
-  const candidates = [
-    './residents.csv?v='+Date.now(),
-    'residents.csv?v='+Date.now(),
-    base + 'residents.csv?v=' + Date.now()
-  ];
-  $('#csvLink').href = base + 'residents.csv';
-  tryLoad(candidates);
-}
-
-function highlight(text, needle){
-  if (!needle) return text;
-  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return text.replace(new RegExp(esc,'gi'), m=>`<mark>${m}</mark>`);
 }
 
 const q = $('#q'), list = $('#list'), result = $('#result');
@@ -190,6 +156,12 @@ function selectItem(rec){
                       ${rec.building||rec.door?`<div class="rowline"><div>其他</div><div>${[rec.building, rec.door].filter(Boolean).join(' / ')}</div></div>`:''}`;
 }
 
+function highlight(text, needle){
+  if (!needle) return text;
+  const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(esc,'gi'), m=>`<mark>${m}</mark>`);
+}
+
 let t;
 q.addEventListener('input', ()=>{
   clearTimeout(t);
@@ -210,18 +182,10 @@ q.addEventListener('keydown', (e)=>{
   if (activeIdx>=0) items[activeIdx].classList.add('active');
 });
 
-$('#reload').addEventListener('click', setup);
-$('#file').addEventListener('change', async (e)=>{
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  const rows = parseCSV(text);
-  records = toRecords(rows);
-  $('#state').textContent = `（本機）已載入 ${records.length} 筆`;
-  $('#state').className = 'ok';
-});
+$('#reload').addEventListener('click', loadCSV);
 
-setup();
+// 自動載入
+loadCSV();
 </script>
 </body>
 </html>
